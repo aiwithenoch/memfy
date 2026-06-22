@@ -114,7 +114,7 @@ export default function App() {
 
 function Shell() {
   const [active, setActive] = useLocalState("memfy_active", "connect");
-  const [onboarded, setOnboarded] = useLocalState("memfy_onboarded", false);
+  const [onboarded] = useState(true);
   const [paid] = useState(true);
   const primary = true;
   const [appFilter, setAppFilter] = useState("all");
