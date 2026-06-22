@@ -1,4 +1,15 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+
+function useLocalState(key, initial) {
+  const [value, setValue] = useState(() => {
+    try {
+      const stored = localStorage.getItem(key);
+      return stored !== null ? JSON.parse(stored) : initial;
+    } catch { return initial; }
+  });
+  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} }, [key, value]);
+  return [value, setValue];
+}
 import { motion } from "framer-motion";
 import { Activity, Brain, ChevronRight, CircleDollarSign, Command, Copy, Database, Gauge, KeyRound, Layers3, Menu, Plus, Search, Settings, ShieldCheck, Terminal, Unplug, X } from "lucide-react";
 
@@ -102,17 +113,17 @@ export default function App() {
 }
 
 function Shell() {
-  const [active, setActive] = useState("connect");
-  const [onboarded, setOnboarded] = useState(false);
+  const [active, setActive] = useLocalState("memfy_active", "connect");
+  const [onboarded, setOnboarded] = useLocalState("memfy_onboarded", false);
   const [paid] = useState(true);
   const primary = true;
   const [appFilter, setAppFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [selectedApp, setSelectedApp] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState({});
+  const [connectionStatus, setConnectionStatus] = useLocalState("memfy_connections", {});
   const [mobileOpen, setMobileOpen] = useState(false);
   const [toast, setToast] = useState("");
-  const [memories, setMemories] = useState(initialMemories);
+  const [memories, setMemories] = useLocalState("memfy_memories", initialMemories);
   const [showAddMemory, setShowAddMemory] = useState(false);
 
   const title = useMemo(() => (active === "connect" ? "Apps" : routes.find((route) => route.id === active)?.label || "Home"), [active]);
@@ -187,7 +198,7 @@ function Sidebar({ active, setActive, mobileOpen, setMobileOpen }) {
 function NavItem({ route, active, setActive }) { if (!route) return null; const Icon = route.icon; return <button onClick={() => setActive(route.id)} className={`nav-item ${active === route.id ? "active" : ""}`}><Icon size={16} />{route.label}</button>; }
 
 function Onboarding({ onDone }) {
-  const [step, setStep] = useState(0); const [code, setCode] = useState(""); const [profile, setProfile] = useState({ name: "", email: "", use: "" }); const [verified, setVerified] = useState(false); const steps = ["code", "profile", "verify"]; const canContinue = step === 0 ? code.trim().length >= 8 : step === 1 ? profile.name && profile.email.includes("@") : verified;
+  const [step, setStep] = useState(0); const [code, setCode] = useLocalState("memfy_code", ""); const [profile, setProfile] = useLocalState("memfy_profile", { name: "", email: "", use: "" }); const [verified, setVerified] = useState(false); const steps = ["code", "profile", "verify"]; const canContinue = step === 0 ? code.trim().length >= 8 : step === 1 ? profile.name && profile.email.includes("@") : verified;
   return <div className="onboarding"><motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="onboarding-card"><div className="onboarding-head"><div className="big-logo"><Brain size={28} /></div><h1>Create your Memory Code</h1><p>Your code-first identity for unified AI memory.</p></div><div className="panel">{steps[step] === "code" && <div className="form-stack"><label>Memory Code</label><input value={code} onChange={(e) => setCode(e.target.value)} placeholder="memfy-raven-kilo-291" /><p className="note"><ShieldCheck size={16} /> Code is hashed, protected with Turnstile, and never stored as plain text.</p></div>}{steps[step] === "profile" && <div className="form-stack"><input value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} placeholder="Name or workspace name" /><input value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} placeholder="Email for verification/recovery" /><input value={profile.use} onChange={(e) => setProfile({ ...profile, use: e.target.value })} placeholder="What are you using Memfy for?" /></div>}{steps[step] === "verify" && <div className="verify"><ShieldCheck size={40} /><h2>Confirm your email</h2><p>Click verify to simulate email confirmation.</p><button className="ghost-btn" onClick={() => setVerified(true)}>{verified ? "Email Verified" : "Verify Email"}</button></div>}<button disabled={!canContinue} className="full-btn" onClick={() => (step < steps.length - 1 ? setStep(step + 1) : onDone())}>{step < steps.length - 1 ? "Continue" : "Enter Dashboard"} <ChevronRight size={16} /></button></div></motion.div></div>;
 }
 
@@ -210,5 +221,12 @@ function InstallRow({ name, mark, setToast }) { return <div className="install-r
 function CopyBox({ label, value, setToast }) { return <button onClick={() => copyText(value, setToast)} className="copy-box"><small>{label}</small><span>{value}</span><Copy size={16} /></button>; }
 function DevPanel({ title, command, setToast }) { return <Panel title={title}><p>Copy this into your agent, IDE, or workflow.</p><button className="ghost-btn" onClick={() => copyText(command, setToast)}><Copy size={16} /> Copy</button><pre><code>{command}</code></pre></Panel>; }
 function Billing() { return <div className="price-panel"><p>Memfy — Open Source</p><h1>Free <span>forever</span></h1><ul><li>Unlimited memory saves and recalls</li><li>API, MCP, CLI, IDE, browser extension</li><li>Primary Memory is automatically default</li><li>Self-host or use the hosted version</li><li>MIT licensed — fork and contribute</li></ul><a href="https://github.com/aiwithenoch/memfy" target="_blank" rel="noreferrer" className="primary-btn" style={{display:"inline-flex",textDecoration:"none",marginTop:8}}>View on GitHub ↗</a></div>; }
-function SettingsPage() { const settings = ["Memory Code", "Email Verification", "Primary Memory", "Data Retention", "Rate Limits", "Security"]; return <div className="card-grid">{settings.map((item) => <div key={item} className="simple-card"><h3>{item}</h3><p>{item === "Primary Memory" ? "Memfy is always the default memory route for connected tools." : "Configure this setting."}</p>{item === "Primary Memory" ? <span className="active-status">Always On</span> : <button className="ghost-btn">Manage</button>}</div>)}</div>; }
+function SettingsPage() {
+  const settings = ["Memory Code", "Email Verification", "Primary Memory", "Data Retention", "Rate Limits", "Security"];
+  function clearAll() {
+    ["memfy_active","memfy_onboarded","memfy_connections","memfy_memories","memfy_code","memfy_profile"].forEach((k) => localStorage.removeItem(k));
+    window.location.reload();
+  }
+  return <div className="stack"><div className="card-grid">{settings.map((item) => <div key={item} className="simple-card"><h3>{item}</h3><p>{item === "Primary Memory" ? "Memfy is always the default memory route for connected tools." : "Configure this setting."}</p>{item === "Primary Memory" ? <span className="active-status">Always On</span> : item === "Data Retention" ? <button className="ghost-btn" onClick={clearAll}>Clear All Local Data</button> : <button className="ghost-btn">Manage</button>}</div>)}</div></div>;
+}
 function Help() { return <div className="two-col"><Panel title="How Memfy Works"><p>Connect your AI tools and Memfy automatically becomes the default memory route. Agents recall and save through Memfy first.</p></Panel><Panel title="Payment Lock"><p>Apps can connect before payment, but memory saves and recalls stay locked until activation.</p></Panel></div>; }
